@@ -1,0 +1,24 @@
+elems_tab:  [
+  [
+    118.546875,
+    1078.40625,
+    35.1875,
+    141.09375,
+    48,
+    1060.8125,
+    189.09375,
+    1096,
+    'selected div (//div[not(descendant::div) and not(descendant::td)])'
+  ],
+  [
+    481.65625,
+    47.5,
+    95,
+    188.3125,
+    387.5,
+    0,
+    575.8125,
+    95,
+    'selected div (//div[not(descendant::div) and not(descendant::td)])'
+  ]
+]
