@@ -55,10 +55,51 @@ function parseJsonToTabs(jsonData) {
   return { elem_ctr_points, all_elems };
 }
 
+function calculateArea(bbox) {
+  // Calculate the area of the bounding box
+  const width = bbox[2];
+  const height = bbox[3];
+  return width * height;
+}
+
 function sortDetectedElements(inf_resp) {
-  
+  // List of elements sorted by importance
+  const elemImpList = [
+      'Popup',
+      'Alert Notification',
+      'Video',
+      'Advertisement',
+      'Logo',
+      'Captcha',
+      'Toggle Button',
+      'Checkbox',
+      'Button',
+      'Input Box'
+  ];
 
+  // Create a deep copy of the input response to avoid modifying the original inf_resp
+  let cloned_inf_resp = JSON.parse(JSON.stringify(inf_resp));
 
+  // Sort annotations within each image in the cloned response
+  cloned_inf_resp.forEach(image => {
+      image.annotations.sort((a, b) => {
+          // Sort by importance
+          const importanceA = elemImpList.indexOf(a.category_id);
+          const importanceB = elemImpList.indexOf(b.category_id);
+
+          if (importanceA === importanceB) {
+              // If same importance, sort by area (largest first)
+              const areaA = calculateArea(a.bbox);
+              const areaB = calculateArea(b.bbox);
+              return areaB - areaA;  // Larger area first
+          }
+
+          // Otherwise, sort by importance
+          return importanceA - importanceB;
+      });
+  });
+
+  return cloned_inf_resp;  // Return the updated (sorted) object
 }
 
 // Function to capture screenshot and send inference request
@@ -66,6 +107,7 @@ async function processDomain(url) {
 
   let browser;
   let inf_resp;
+  let sorted_inf_resp;
 
   try {
     // Launch browser
@@ -93,8 +135,10 @@ async function processDomain(url) {
 
     // Send the screenshot buffer and domain name to the inference service
     inf_resp = await sendInferenceRequest(screenshotBuffer, url);
+    sorted_inf_resp = sortDetectedElements(inf_resp);
 
-    console.log('Inference response:', JSON.stringify(inf_resp, null, 2));
+    // console.log('Inference response:', JSON.stringify(inf_resp, null, 2));
+    // console.log('Sorted inference response:', JSON.stringify(sorted_inf_resp, null, 2));
 
   } catch (error) {
     // Catch any errors that occur during the process and log them
@@ -109,7 +153,7 @@ async function processDomain(url) {
   }
 
   // Return the inference response
-  return inf_resp;
+  return sorted_inf_resp;
 }
 
 // Function to send inference request
@@ -297,7 +341,7 @@ async function load_page() {
         var ss_success_page_next = true
       }
 
-      // ### Calling model API
+      // ### Calling model API 1
 
       let raw_elem_json = await processDomain(page_next.url())
       let { elem_ctr_points, all_elems } = parseJsonToTabs(raw_elem_json)
@@ -314,8 +358,8 @@ async function load_page() {
 
         try {
           var element_obj = await findElementByCoordinates(page_next, json_object_before.screenshot_name, all_elems[0][0], all_elems[0][1], all_elems[0][2], all_elems[0][3]) //The first json object does not have calculated elementobj
-        } catch (e) {
-          config.log.error("Error1 in findElementByCoordinates: " + e)
+        } catch (err) {
+          config.log.error("Error1 in findElementByCoordinates: " + err)
 
         }
 
@@ -706,8 +750,8 @@ async function load_page() {
                   var [early_stop, visited_URLs, totaltabcount_sess, ss_success_page_next] = await clickFiveTimes(url_first_tab, early_stop, tabCountClicked, url_next, browser, page_next, config.agent_name, visited_URLs, config.PAGE_LOAD_TIMEOUT_TABS, is_mobile, false, json_object.url, json_object.url_id, json_object2, totaltabcount_sess_before, totaltabcount_sess, visit_id_tab + (new Date().getTime()))
                 }
 
-              } catch (e) {
-                config.log.error("error in clickFiveTimes for new tab closing tab:" + e)
+              } catch (err) {
+                config.log.error("error in clickFiveTimes for new tab closing tab:" + err)
               }
               await page_next.goto(url_next, { waitUntil: 'networkidle2' });
 
@@ -756,8 +800,8 @@ async function load_page() {
         const cdp = await page_next.target().createCDPSession();
         const { data } = await cdp.send('Page.captureSnapshot', { format: 'mhtml' });
         fs.writeFileSync(mhtml_name + ".mhtml", data);
-      } catch (e) {
-        config.log.error("In capturesnapshot error:" + e)
+      } catch (err) {
+        config.log.error("In capturesnapshot error:" + err)
         config.log.error("The url is:" + url_i)
       }
 
@@ -773,9 +817,9 @@ async function load_page() {
         try {
           await Promise.race([page_next.screenshot({ path: ss_name, type: 'png' }), new Promise((resolve, reject) => setTimeout(reject, 180000))]);
 
-        } catch (e) {
+        } catch (err) {
           config.log.error("Error during taking screenshot. Url is:" + url_i)
-          config.log.error("error is:" + e)
+          config.log.error("error is:" + err)
           return { 'time': unix_time, 'screenshot_success': false, 'screenshot_name': null, 'url': url_i, 'url_id': url_id, 'element_clicked': null }
 
         }
@@ -783,8 +827,8 @@ async function load_page() {
         if (isClickableTab == true) {
           try {
             var element_obj = await findElementByCoordinates(page_next, ss_name, all_elems[0], all_elems[1], all_elems[2], all_elems[3])
-          } catch (e) {
-            config.log.error("Error2 in findElementByCoordinates: " + e)
+          } catch (err) {
+            config.log.error("Error2 in findElementByCoordinates: " + err)
 
           }
 
@@ -798,9 +842,9 @@ async function load_page() {
             await page_next.waitForTimeout(config.WAIT_AFTER_RESIZE)
             await Promise.race([page_next.screenshot({ path: ss_name_land, type: 'png' }), new Promise((resolve, reject) => setTimeout(reject, 180000))]);
 
-          } catch (e) {
+          } catch (err) {
             config.log.error("Error during taking screenshot. Url is:" + url_i)
-            config.log.error("error is:" + e)
+            config.log.error("error is:" + err)
 
           }
 
@@ -809,8 +853,8 @@ async function load_page() {
           try {
             await page_next.setViewport({ width: width, height: height })
             await page_next.waitForTimeout(config.WAIT_AFTER_RESIZE)
-          } catch (e) {
-            console.log.error("error in setting default resolution:" + e)
+          } catch (err) {
+            console.log.error("error in setting default resolution:" + err)
 
           }
 
@@ -844,9 +888,9 @@ async function load_page() {
             // time_ss=new Date().getTime()
             await Promise.race([page_next.screenshot({ path: ss_name, type: 'png' }), new Promise((resolve, reject) => setTimeout(reject, 180000))]);
             // await page_next.screenshot({ path:ss_name , type: 'png' });
-          } catch (e) {
+          } catch (err) {
             config.log.error("Error during taking screenshot. Url is:" + url_i)
-            config.log.error("error is:" + e)
+            config.log.error("error is:" + err)
             return { 'time': unix_time, 'screenshot_success': false, 'screenshot_name': null, 'url': url_i, 'url_id': url_id, 'element_clicked': null }
           }
           console.log("just after taking screenshot desktop")
@@ -873,8 +917,8 @@ async function load_page() {
 
             try {
               var element_obj = await findElementByCoordinates(page_next, ss_name, all_elems[0], all_elems[1], all_elems[2], all_elems[3])
-            } catch (e) {
-              config.log.error("Error3 in findElementByCoordinates: " + e)
+            } catch (err) {
+              config.log.error("Error3 in findElementByCoordinates: " + err)
 
             }
 
@@ -1037,7 +1081,7 @@ async function load_page() {
             })
 
           }
-          catch (e) {
+          catch (err) {
             config.log.error("Error6:" + err)
           }
 
@@ -1080,16 +1124,10 @@ async function load_page() {
         // await waitTillHTMLRendered(page)
         var url_first_tab = page.url()
 
-        // ### Calling model API
+        // ### Calling model API 2
 
         let raw_elem_json = await processDomain(url_first_tab)
-        console.log(raw_elem_json)
         let { elem_ctr_points, all_elems } = parseJsonToTabs(raw_elem_json)
-
-        console.log({ elem_ctr_points, all_elems })
-
-        console.log("elem_ctr_points", elem_ctr_points)
-        console.log("all_elems", all_elems)
 
         var tabCount = (await browser.pages()).length
         // console.log("elem coords are:"+elem_ctr_points)
@@ -1174,10 +1212,10 @@ async function load_page() {
               var html = document.body.innerHTML
               return html
             })
-          } catch (e) {
+          } catch (err) {
 
             config.log.error("Error1 in evaluating document.body.innerHTML. Url is")
-            config.log.error("error is:" + e)
+            config.log.error("error is:" + err)
             html_before = null
 
           }
@@ -1437,9 +1475,9 @@ async function load_page() {
               try {
                 console.log("TAB COUNT BEFORE VISITIN CLICKFIVETIMES:" + (await browser.pages()).length)
                 var [early_stop, visited_URLs, totaltabcount_sess, ss_success_page_next] = await clickFiveTimes(url_first_tab, early_stop, tabCountClicked, url_next, browser, page_next, config.agent_name, visited_URLs, config.PAGE_LOAD_TIMEOUT_TABS, is_mobile, true, json_object.url, json_object.url_id, json_object4, totaltabcount_sess_before, totaltabcount_sess, visit_id_tab)
-              } catch (e) {
+              } catch (err) {
 
-                config.log.error("error in clickFiveTimes closing tab:" + e)
+                config.log.error("error in clickFiveTimes closing tab:" + err)
               }
               config.log.info(`ss_success_page_next is ${ss_success_page_next} in the url_next: ${url_next}`)
 
@@ -1527,8 +1565,8 @@ async function load_page() {
       return
 
     }
-    catch (e) {
-      config.log.error("an error happened during crawling:" + e)
+    catch (err) {
+      config.log.error("an error happened during crawling:" + err)
       // await zipper_netlog(netlogfile)
       await process_ended(id, browser, netlogfile)
     }
@@ -1574,8 +1612,8 @@ async function zipper_netlog(netlogfile) {
       });
     });
 
-  } catch (e) {
-    config.log.error("Error during compressing netlog file:" + e)
+  } catch (err) {
+    config.log.error("Error during compressing netlog file:" + err)
 
   }
 
@@ -1594,12 +1632,11 @@ async function process_ended(id, browser, netlogfile) {
     config.log.info("closing the download page")
     await page_download.close()
 
-  } catch (e) {
+  } catch (err) {
     config.log.error("Error during download page")
     if (!(await page_download.isClosed())) {
       await page_download.close()
     }
-
   }
 
   config.log.info('crawl process ended ::' + id)
